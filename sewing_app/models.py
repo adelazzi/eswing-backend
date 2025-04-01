@@ -517,3 +517,108 @@ class AdvertisementsAtelier(models.Model):
     def __str__(self):
         return self.title
 
+
+
+class UserInteraction(models.Model):
+    id = models.AutoField(primary_key=True)
+    sender_id = models.IntegerField()
+    receiver_id = models.IntegerField()
+    sender_role = models.CharField(max_length=20)
+    receiver_role = models.CharField(max_length=20)
+    sender_name = models.CharField(max_length=255)
+    receiver_name = models.CharField(max_length=255)
+    last_interaction_time = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        # Get sender name based on role
+        if self.sender_role == "client":
+            sender = Client.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        elif self.sender_role == "atelier":
+            sender = Atelier.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        elif self.sender_role == "fabric_store":
+            sender = FabricStore.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        
+        # Get receiver name based on role
+        if self.receiver_role == "client":
+            receiver = Client.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+        elif self.receiver_role == "atelier":
+            receiver = Atelier.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+        elif self.receiver_role == "fabric_store":
+            receiver = FabricStore.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+                
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Interaction between {self.sender_name} and {self.receiver_name}"
+
+
+class Message(models.Model):
+    id = models.AutoField(primary_key=True)
+    sender_id = models.IntegerField()
+    receiver_id = models.IntegerField()
+    sender_role = models.CharField(max_length=20)
+    receiver_role = models.CharField(max_length=20)
+    sender_name = models.CharField(max_length=255)
+    receiver_name = models.CharField(max_length=255)
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        # Get sender name based on role
+        if self.sender_role == "client":
+            sender = Client.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        elif self.sender_role == "atelier":
+            sender = Atelier.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        elif self.sender_role == "fabric_store":
+            sender = FabricStore.objects.filter(user_id=self.sender_id).first()
+            if sender:
+                self.sender_name = sender.name
+        
+        # Get receiver name based on role
+        if self.receiver_role == "client":
+            receiver = Client.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+        elif self.receiver_role == "atelier":
+            receiver = Atelier.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+        elif self.receiver_role == "fabric_store":
+            receiver = FabricStore.objects.filter(user_id=self.receiver_id).first()
+            if receiver:
+                self.receiver_name = receiver.name
+                
+        # Also update the corresponding UserInteraction
+        interaction, created = UserInteraction.objects.get_or_create(
+            sender_id=self.sender_id,
+            receiver_id=self.receiver_id,
+            sender_role=self.sender_role,
+            receiver_role=self.receiver_role,
+            defaults={
+                'sender_name': self.sender_name,
+                'receiver_name': self.receiver_name
+            }
+        )
+        interaction.last_interaction_time = self.timestamp
+        interaction.save()
+                
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Message from {self.sender_name} to {self.receiver_name}"

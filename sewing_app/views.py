@@ -7,12 +7,16 @@ from django.db import models
 from .models import (
     Client, Atelier, FabricStore, Commandes, DemandeAtelier,
     CommandeAtelierFabricStore, DemandeFabricStore, Product, AdvertisementsAtelier,
-
+Message,UserInteraction
 )
+            # Generate token
+import datetime
+from django.db.models import Q
+    
 from .serializers import (
     ClientSerializer, AtelierSerializer, FabricStoreSerializer, CommandeSerializer,
-    DemandeAtelierSerializer, CommandeAtelierFabricStoreSerializer, DemandeFabricStoreSerializer,
-    ProductSerializer, AdvertisementsAtelierSerializer, 
+    DemandeAtelierSerializer, CommandeAtelierFabricStoreSerializer, DemandeFabricStoreSerializer, MessageListSerializer,
+    ProductSerializer, AdvertisementsAtelierSerializer, MessageSerializer,UserInteractionSerializer
 )
 from .pagination import CustomPagination 
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -900,9 +904,141 @@ class AdvertisementsAtelierViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
 
 # =============== Messaging APIs ===============
+class MessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+    permission_classes = [AllowAny]
+    pagination_class = CustomPagination
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return MessageListSerializer
+        return MessageSerializer
+
+    def get_queryset(self):
+        # Start with base queryset
+        queryset = Message.objects.all()
+        
+        # Get query parameters for the conversation participants
+        params = self.request.query_params
+        
+        # If conversation parameters are provided, get messages in both directions
+        if (user1_id := params.get('sender_id')) and (user1_role := params.get('sender_role')) and \
+           (user2_id := params.get('receiver_id')) and (user2_role := params.get('receiver_role')):
+            
+            # Create an efficient OR query using Q objects
+            queryset = queryset.filter(
+                Q(sender_id=user1_id, sender_role=user1_role, receiver_id=user2_id, receiver_role=user2_role) | 
+                Q(sender_id=user2_id, sender_role=user2_role, receiver_id=user1_id, receiver_role=user1_role)
+            )
+        else:
+            # Build filter dictionary dynamically only for provided parameters
+            filters = {}
+            for param, field in [
+                ('sender_id', 'sender_id'),
+                ('sender_role', 'sender_role'),
+                ('receiver_id', 'receiver_id'),
+                ('receiver_role', 'receiver_role')
+            ]:
+                if value := params.get(param):
+                    filters[field] = value
+            
+            if filters:
+                queryset = queryset.filter(**filters)
+        
+        # Return ordered queryset, limiting to latest messages first
+        return queryset.order_by('-timestamp')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return create_response(
+                data=serializer.data,
+                message="Message sent successfully",
+                status_code=status.HTTP_201_CREATED
+            )
+        return create_response(
+            message="Failed to send message",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+class UserInteractionViewSet(viewsets.ModelViewSet):
+    queryset = UserInteraction.objects.all()
+    serializer_class = UserInteractionSerializer
+    permission_classes = [AllowAny]
+    pagination_class = CustomPagination
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by sender_id if provided
+        # Build filters dynamically based on query parameters
+        filters = {}
+        if sender_id := self.request.query_params.get('sender_id'):
+            filters['sender_id'] = sender_id
+        
+        if sender_role := self.request.query_params.get('sender_role'):
+            filters['sender_role'] = sender_role
+            
+        # Apply all filters at once if any exist
+        if filters:
+            queryset = queryset.filter(**filters)
+        # Order by most recent interaction
+        return queryset.order_by('-last_interaction_time')
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            # Import at the top of the file or define the serializer in serializers.py
+            return UserInteractionListSerializer
+        return self.serializer_class
+
+    def create(self, request, *args, **kwargs):
+        # Extract sender and receiver data from request
+        sender_id = request.data.get('sender_id')
+        sender_role = request.data.get('sender_role')
+        receiver_id = request.data.get('receiver_id')
+        receiver_role = request.data.get('receiver_role')
+        
+        # Validate required fields
+        if not all([sender_id, sender_role, receiver_id, receiver_role]):
+            return create_response(
+                message="Missing required fields",
+                errors={"fields": "sender_id, sender_role, receiver_id, and receiver_role are required"},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Use select_for_update to prevent race conditions in high-traffic scenarios
+        try:
+            # Use get_or_create with defaults to minimize queries
+            # This does a SELECT followed by either nothing or an INSERT in a single operation
+            interaction, created = UserInteraction.objects.select_related().get_or_create(
+                sender_id=sender_id,
+                sender_role=sender_role,
+                receiver_id=receiver_id,
+                receiver_role=receiver_role,
+                defaults=request.data
+            )
+            
+            # If not created, we found an existing one - no need for further updates
+            serializer = self.get_serializer(interaction)
+            
+            return create_response(
+                data=serializer.data,
+                message="User interaction recorded successfully" if created else "Retrieved existing user interaction",
+                status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            )
+        except Exception as e:
+            return create_response(
+                message="Failed to record user interaction",
+                errors={"detail": str(e)},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
 # =============== Login APIs ===============
 from django.contrib.auth.hashers import check_password
+from .serializers import UserInteractionListSerializer
 
 # Simple Unified Login View
 class SimpleLoginView(APIView):
@@ -944,9 +1080,7 @@ class SimpleLoginView(APIView):
                     status_code=status.HTTP_401_UNAUTHORIZED
                 )
             
-            # Generate token
-            import datetime
-            
+        
             # Get or create Django user for authentication
             django_user, created = User.objects.get_or_create(
                 username=str(user.user_id),

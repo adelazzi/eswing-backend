@@ -2,8 +2,33 @@ from rest_framework import serializers
 from .models import (
     Client, Atelier, FabricStore, Commandes, DemandeAtelier,
     CommandeAtelierFabricStore, DemandeFabricStore, Product, AdvertisementsAtelier,
-
+UserInteraction,Message
 )
+
+class UserInteractionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserInteraction
+        fields = '__all__'
+        read_only_fields = ['sender_name', 'receiver_name', 'last_interaction_time']
+
+class UserInteractionListSerializer(serializers.ModelSerializer):
+    """Serializer for retrieving user interactions with limited fields"""
+    class Meta:
+        model = UserInteraction
+        fields = ('receiver_id', 'receiver_role','receiver_name', 'last_interaction_time')
+
+class MessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = '__all__'
+        read_only_fields = ['sender_name', 'receiver_name', 'timestamp']
+
+class MessageListSerializer(serializers.ModelSerializer):
+    """Serializer for retrieving messages with limited fields"""
+    class Meta:
+        model = Message
+        fields = ('id', 'content', 'timestamp', 'sender_id', 'sender_role')
+
 
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:

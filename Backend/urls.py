@@ -7,9 +7,11 @@ from sewing_app.views import (
     CommandeViewSet, 
     DemandeAtelierViewSet, 
     CommandeAtelierFabricStoreViewSet, 
-    DemandeFabricStoreViewSet, 
+    DemandeFabricStoreViewSet,
+    MessageViewSet, 
     ProductViewSet, SimpleLoginView,
     AdvertisementsAtelierViewSet,
+    UserInteractionViewSet,
         delete_fabric_store, 
     delete_product,
     home_view,delete_atelier,delete_client,
@@ -30,6 +32,10 @@ router.register(r'commandes-atelier-fabric-store', CommandeAtelierFabricStoreVie
 router.register(r'demandes-fabric-store', DemandeFabricStoreViewSet, basename='demandefabricstore')
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'advertisements-ateliers', AdvertisementsAtelierViewSet, basename='advertisementsatelier')
+
+router.register(r'messages', MessageViewSet, basename='message')
+router.register(r'user-interactions', UserInteractionViewSet, basename='userinteraction')
+
 
 urlpatterns = [
     path('', home_view, name='home'),
@@ -77,6 +83,26 @@ if settings.DEBUG:
 #   DELETE /api/ateliers/{id}/
 #   POST /api/atelier/login/
 #   DELETE /api/ateliers/delete/<str:atelier_name>/
+
+
+# User Interactions:
+#   GET /api/user-interactions/
+#   POST /api/user-interactions/
+#   GET /api/user-interactions/{id}/
+#   PUT /api/user-interactions/{id}/
+#   DELETE /api/user-interactions/{id}/
+
+# Messages:
+#   GET /api/messages/
+#   POST /api/messages/
+#   GET /api/messages/{id}/
+#   PUT /api/messages/{id}/
+#   DELETE /api/messages/{id}/
+#   GET /api/messages/conversation/?user1_id=X&user1_role=Y&user2_id=Z&user2_role=W
+#   GET /api/messages/conversations/?user_id=X&user_role=Y
+#   POST /api/messages/mark-read/
+#   GET /api/messages/unread-count/?user_id=X&user_role=Y
+
 
 # Fabric Stores:
 #   GET /api/fabric-stores/
